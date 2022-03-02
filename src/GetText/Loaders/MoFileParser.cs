@@ -168,7 +168,7 @@ namespace GetText.Loaders
                                 {
                                     string headerName = headerText.Substring(0, separatorIndex);
                                     string headerValue = headerText.Substring(separatorIndex + 1).Trim();
-                                    parsedFile.Headers.Add(headerName, headerValue.Trim());
+                                    parsedFile.Headers[headerName] = headerValue.Trim();
                                 }
                             }
 
