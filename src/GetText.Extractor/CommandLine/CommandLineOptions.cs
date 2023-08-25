@@ -9,14 +9,16 @@ namespace GetText.Extractor.CommandLine
 {
     internal static class CommandLineOptions
     {
-        internal static RootCommand RootCommand => new RootCommand("Extracts strings from C# source code files to creates or updates PO template file");
+        internal static RootCommand RootCommand => new RootCommand("Extracts strings from C# source code files to create or update PO template file");
 
-        internal static Option<FileInfo> SourceOption
+        internal static Option<IList<FileInfo>> SourceOption
         {
             get
             {
-                return new Option<FileInfo>(new[] { "-s", "--source" }, TryParseSourceFilePathArgument, true, "Visual Studio Solution file, Project file, or source directory") {
+                return new Option<IList<FileInfo>>(new[] { "-s", "--source" }, TryParseSourceFilePathArgument, true, "Visual Studio Solution file, Project file, or source directory. Multiple entries are allowed.")
+                {
                     Name = "Source",
+                    Arity = ArgumentArity.OneOrMore,
                 };
             }
         }
@@ -25,7 +27,8 @@ namespace GetText.Extractor.CommandLine
         {
             get
             {
-                return new Option<FileInfo>(new[] { "-t", "--target" }, TryParseDefaultTargetFile, true, "Target PO template file. ") {
+                return new Option<FileInfo>(new[] { "-t", "--target" }, TryParseDefaultTargetFile, true, "Target PO template file")
+                {
                     Name = "Target",
                 };
             }
@@ -36,6 +39,13 @@ namespace GetText.Extractor.CommandLine
         internal static Option<bool> Verbose => new Option<bool>(new[] { "--verbose", "-v" }, "Verbose output");
 
         internal static Option<bool> UseUnixPathSeparator => new Option<bool>(new[] { "--unixstyle", "-u" }, "Unix-style Path Separator ('/')");
+
+        internal static Option<bool> SortOutput => new Option<bool>(new[] { "--order", "-o" }, "Sort catalogue entries before exporting to template");
+
+        internal static Option<List<string>> GetStringAliases => new Option<List<string>>(new[] { "--aliasgetstring", "-as" }, "List of aliases for GetString") { AllowMultipleArgumentsPerToken = true };
+        internal static Option<List<string>> GetParticularStringAliases => new Option<List<string>>(new[] { "--aliasgetparticular", "-ad" }, "List of aliases for GetParticularString") { AllowMultipleArgumentsPerToken = true };
+        internal static Option<List<string>> GetPluralStringAliases => new Option<List<string>>(new[] { "--aliasgetplural", "-ap" }, "List of aliases for GetPluralString") { AllowMultipleArgumentsPerToken = true };
+        internal static Option<List<string>> GetParticularPluralStringAliases => new Option<List<string>>(new[] { "--aliasgetparticularplural", "-adp" }, "List of aliases for GetParticularPluralString") { AllowMultipleArgumentsPerToken = true };
 
         #region private validation and parsing
         private static FileInfo TryParseDefaultTargetFile(ArgumentResult argument)
@@ -67,7 +77,7 @@ namespace GetText.Extractor.CommandLine
                     return new FileInfo(token);
                 }
             }
-            catch(Exception ex) when (ex is ArgumentException || ex is NotSupportedException)
+            catch (Exception ex) when (ex is ArgumentException || ex is NotSupportedException)
             {
                 argument.ErrorMessage = $"The path for '{token}' is not valid. ({ex.Message})";
                 return default;
@@ -76,33 +86,44 @@ namespace GetText.Extractor.CommandLine
             return default;
         }
 
-        private static FileInfo TryParseSourceFilePathArgument(ArgumentResult argument)
+        private static IList<FileInfo> TryParseSourceFilePathArgument(ArgumentResult argument)
         {
-            string token = argument.Tokens.Count switch
+            if (argument.Tokens.Count == 0)
             {
-                0 => ".",
-                1 => argument.Tokens[0].Value,
-                _ => throw new InvalidOperationException("Unexpected token count."),
-            };
-            if (File.Exists(token))
-            {
-                return new FileInfo(Path.GetFullPath(token));
+                return new[] { new FileInfo(Path.GetFullPath(".")) };
             }
 
-            if (Directory.Exists(token))
+            var fileInfos = argument.Tokens.Select(token =>
             {
-                if (TryFindProjectFile(token, out string path))
+                var tokenValue = token.Value;
+
+                if (File.Exists(tokenValue))
                 {
-                    return new FileInfo(path);
+                    return new FileInfo(Path.GetFullPath(tokenValue));
                 }
-                else
+
+                if (Directory.Exists(tokenValue))
                 {
-                    return new FileInfo(Path.GetFullPath(token));
+                    if (TryFindProjectFile(tokenValue, out string path))
+                    {
+                        return new FileInfo(path);
+                    }
+                    else
+                    {
+                        return new FileInfo(Path.GetFullPath(tokenValue));
+                    }
                 }
+
+                argument.ErrorMessage = $"The file or directory '{tokenValue}' could not be found.";
+                return default;
+            }).ToList();
+
+            if (argument.ErrorMessage != null)
+            {
+                return default;
             }
 
-            argument.ErrorMessage = $"The file or directory '{token}' could not be found.";
-            return default;
+            return fileInfos;
         }
 
         private static bool TryFindProjectFile(string directoryPath, out string result)
@@ -127,20 +148,17 @@ namespace GetText.Extractor.CommandLine
                 matches.RemoveAll(m => m.EndsWith(".csproj", StringComparison.OrdinalIgnoreCase));
             }
 
-            if (matches.Count == 0)
+            switch (matches.Count)
             {
-                result = $"No project file or solution file was found in directory '{Path.GetFullPath(directoryPath)}'.";
-                return false;
-            }
-            else if (matches.Count == 1)
-            {
-                result = matches[0];
-                return true;
-            }
-            else
-            {
-                result = $"More than one project file or solution file was found in directory '{Path.GetFullPath(directoryPath)}'.";
-                return false;
+                case 0:
+                    result = $"No project file or solution file was found in directory '{Path.GetFullPath(directoryPath)}'.";
+                    return false;
+                case 1:
+                    result = matches[0];
+                    return true;
+                default:
+                    result = $"More than one project file or solution file was found in directory '{Path.GetFullPath(directoryPath)}'.";
+                    return false;
             }
         }
         #endregion

@@ -1,0 +1,13 @@
+﻿<Project Sdk="Microsoft.NET.Sdk">
+
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+	  <TargetFrameworks>net6.0</TargetFrameworks>
+	  <StartupObject>ExtractorTestSample.Program</StartupObject>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <ProjectReference Include="..\..\..\src\GetText\GetText.csproj" />
+  </ItemGroup>
+
+</Project>

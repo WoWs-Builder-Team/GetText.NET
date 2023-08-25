@@ -12,7 +12,8 @@ namespace GetText.Extractor.Template
     {
         internal static string Newline = Environment.NewLine;
         internal static string[] LineEndings = new string[] { "\n\r", "\r\n", "\r", "\n", "\r" };
-        private readonly ConcurrentDictionary<string, CatalogEntry> entries = new ConcurrentDictionary<string, CatalogEntry>();
+        internal readonly ConcurrentDictionary<string, CatalogEntry> entries = new ConcurrentDictionary<string, CatalogEntry>();
+        private bool sortOutput;
 
         public string FileName { get; private set; }
         public CatalogHeader Header { get; set; }
@@ -29,7 +30,7 @@ namespace GetText.Extractor.Template
                 return;     // don't care about empty message ids
             if (!entries.TryGetValue(CatalogEntry.BuildKey(context, messageId), out CatalogEntry result))
             {
-                result = new CatalogEntry(context, messageId, string.Empty);
+                result = new CatalogEntry(context, messageId);
                 if (!entries.TryAdd(result.Key, result))
                     result = entries[result.Key];
             }
@@ -44,7 +45,7 @@ namespace GetText.Extractor.Template
                 return;     // don't care about empty message ids
             if (!entries.TryGetValue(CatalogEntry.BuildKey(context, messageId), out CatalogEntry result))
             {
-                result = new CatalogEntry(context, messageId, string.Empty);
+                result = new CatalogEntry(context, messageId);
                 if (!entries.TryAdd(result.Key, result))
                     result = entries[result.Key];
             }
@@ -53,11 +54,12 @@ namespace GetText.Extractor.Template
             result.Comments.Flags = formatString ? result.Comments.Flags | MessageFlags.CSharpFormat : result.Comments.Flags & ~MessageFlags.CSharpFormat;
         }
 
-        public async Task WriteAsync()
+        public async Task WriteAsync(bool sort)
         {
             if (entries.IsEmpty)
                 return;
 
+            sortOutput = sort;
             string backupFile = FileName + ".bak";
             if (File.Exists(backupFile))
             {
@@ -79,7 +81,7 @@ namespace GetText.Extractor.Template
             builder.Append(Header.ToString());
 
             //Sorting catalog entries to allow easier diff ie in source control workflows
-            foreach (string key in entries.Keys.OrderBy(entry => entry))
+            foreach (string key in sortOutput ? entries.Keys.OrderBy(entry => entry) : entries.Keys.AsEnumerable())
             {
                 builder.Append(entries[key].ToString());
             }
